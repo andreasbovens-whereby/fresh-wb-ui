@@ -93,6 +93,13 @@ whiteboard relay is a WebSocket server and needs a home of its own.
    `VITE_WHITEBOARD_WS_URL=wss://<relay-host>/whiteboard-ws npm run build`.
    Without a relay URL, everything except whiteboard sync still works.
 
+   Example — Render free tier: New → Web Service → this repo, build command
+   `npm ci`, start command `npm run relay`, then set the repo's
+   `WHITEBOARD_WS_URL` Actions variable to
+   `wss://<service>.onrender.com/whiteboard-ws` and re-run the deploy
+   workflow. (Free instances sleep when idle — the first board connection
+   after a quiet period takes ~30–60s to wake the relay.)
+
 Everything else (calls, chat, transcription, knocking) talks directly to
 Whereby's infrastructure from the browser and needs no backend.
 
