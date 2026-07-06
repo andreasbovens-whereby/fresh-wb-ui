@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { flushSync } from 'react-dom'
 import {
   VideoView,
@@ -10,7 +10,14 @@ import VideoTile, { type TileParticipant } from './VideoTile'
 import Toolbar from './Toolbar'
 import SidePanel, { type PanelTab, type TranscriptEntry } from './SidePanel'
 import WaitingParticipantsNotice from './WaitingParticipantsNotice'
-import { PeopleIcon, SpinnerIcon } from './icons'
+import BackgroundSettings from './BackgroundSettings'
+import { PeopleIcon, SettingsIcon, SpinnerIcon } from './icons'
+import {
+  BACKGROUND_IMAGES,
+  loadBackground,
+  saveBackground,
+  type BackgroundChoice,
+} from '../lib/backgrounds'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useBoardActivity } from '../lib/useBoardActivity'
 import type { MicProblem } from '../lib/useMicWatchdog'
@@ -96,6 +103,29 @@ export default function CallRoom({
     )
   }
 
+  // Custom background behind the tiles area (not the sidebar); when active,
+  // header/toolbar controls switch to a frosted-glass look.
+  const [background, setBackground] = useState<BackgroundChoice>(loadBackground)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsButtonRef = useRef<HTMLButtonElement>(null)
+  const frosted = background !== null
+
+  function changeBackground(choice: BackgroundChoice) {
+    setBackground(choice)
+    saveBackground(choice)
+  }
+
+  const backgroundStyle: CSSProperties =
+    background?.type === 'color'
+      ? { backgroundColor: background.hex }
+      : background?.type === 'image'
+        ? {
+            backgroundImage: `url(${BACKGROUND_IMAGES.find((i) => i.id === background.id)?.url})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }
+        : {}
+
   const participants: TileParticipant[] = useMemo(() => {
     const local: TileParticipant[] = state.localParticipant
       ? [
@@ -158,7 +188,7 @@ export default function CallRoom({
 
   return (
     <div className="fade-in flex h-full">
-      <div className="relative flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col" style={backgroundStyle}>
         <WaitingParticipantsNotice
           waitingParticipants={state.waitingParticipants}
           onAccept={actions.acceptWaitingParticipant}
@@ -194,14 +224,49 @@ export default function CallRoom({
         )}
 
         <header className="flex items-center justify-between px-5 py-3">
-          <span className="text-lg font-semibold tracking-tight">
+          <span
+            className={`text-lg font-semibold tracking-tight ${
+              frosted ? 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.55)]' : ''
+            }`}
+          >
             Fresh <span className="text-brand-400">·</span> Whereby
           </span>
-          <span className="flex items-center gap-2 rounded-xl bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300">
-            <PeopleIcon />
-            {participants.length}
+          <span className="flex items-center gap-2">
+            <span
+              className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm ${
+                frosted
+                  ? 'border border-white/25 bg-zinc-950/25 text-white backdrop-blur-[15px]'
+                  : 'bg-zinc-900 text-zinc-300'
+              }`}
+            >
+              <PeopleIcon />
+              {participants.length}
+            </span>
+            <button
+              ref={settingsButtonRef}
+              type="button"
+              onClick={() => setSettingsOpen((open) => !open)}
+              aria-label="Settings"
+              aria-expanded={settingsOpen}
+              className={`flex items-center rounded-xl px-2.5 py-1.5 text-sm transition active:scale-95 ${
+                frosted
+                  ? 'border border-white/25 bg-zinc-950/25 text-white backdrop-blur-[15px] hover:bg-zinc-950/45'
+                  : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
+              }`}
+            >
+              <SettingsIcon />
+            </button>
           </span>
         </header>
+
+        {settingsOpen && (
+          <BackgroundSettings
+            choice={background}
+            onChange={changeBackground}
+            onClose={() => setSettingsOpen(false)}
+            anchorRef={settingsButtonRef}
+          />
+        )}
 
         {/* On mobile the panel overlays just this middle section, keeping the
             header above and the toolbar below visible and in place. */}
@@ -226,7 +291,7 @@ export default function CallRoom({
                 <div className="panel-scroll flex shrink-0 gap-3 overflow-x-auto lg:w-52 lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto">
                   {participants.map((p) => (
                     <div key={p.id} className="aspect-video w-44 shrink-0 lg:w-full">
-                      <VideoTile participant={p} />
+                      <VideoTile participant={p} frosted={frosted} />
                     </div>
                   ))}
                 </div>
@@ -261,7 +326,7 @@ export default function CallRoom({
                 <div className="panel-scroll flex shrink-0 gap-3 overflow-x-auto lg:w-52 lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto">
                   {participants.map((p) => (
                     <div key={p.id} className="aspect-video w-44 shrink-0 lg:w-full">
-                      <VideoTile participant={p} />
+                      <VideoTile participant={p} frosted={frosted} />
                     </div>
                   ))}
                 </div>
@@ -270,6 +335,7 @@ export default function CallRoom({
               <div className="flex h-full flex-col gap-3 lg:flex-row">
                 <div className="min-h-0 flex-1">
                   <VideoTile
+                    frosted={frosted}
                     participant={featuredParticipant}
                     style={tileTransitionStyle(featuredParticipant.id)}
                     onDoubleClick={() => toggleFeatured(featuredParticipant.id)}
@@ -281,6 +347,7 @@ export default function CallRoom({
                     .map((p) => (
                       <div key={p.id} className="aspect-video w-44 shrink-0 lg:w-full">
                         <VideoTile
+                          frosted={frosted}
                           participant={p}
                           style={tileTransitionStyle(p.id)}
                           onDoubleClick={() => toggleFeatured(p.id)}
@@ -311,6 +378,7 @@ export default function CallRoom({
                   {participants.map((p) => (
                     <div key={p.id} className="tile-cell">
                       <VideoTile
+                        frosted={frosted}
                         participant={p}
                         style={tileTransitionStyle(p.id)}
                         onDoubleClick={() => toggleFeatured(p.id)}
@@ -337,6 +405,7 @@ export default function CallRoom({
 
         <Toolbar
           localMedia={localMedia}
+          frosted={frosted}
           isCameraEnabled={state.isCameraEnabled}
           isMicrophoneEnabled={state.isMicrophoneEnabled}
           isScreensharing={isScreensharing}

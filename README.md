@@ -107,3 +107,16 @@ Whereby's infrastructure from the browser and needs no backend.
 
 Vite · React 19 · TypeScript · Tailwind CSS v4 · @whereby.com/browser-sdk v3 ·
 @excalidraw/excalidraw · ws
+
+## Credits
+
+Background photos from [Unsplash](https://unsplash.com) ([license](https://unsplash.com/license)):
+
+- Mountains — [Kalen Emsley](https://unsplash.com/@kalenemsley)
+  ([photo](https://unsplash.com/photos/snow-capped-mountains-with-valley-and-forest-Bkci_8qcdvQ))
+- Beach — [Sean Oulashin](https://unsplash.com/@oulashin)
+  ([photo](https://unsplash.com/photos/seashore-during-golden-hour-KMn4VEeEPR8))
+- Hills — [Claudio Testa](https://unsplash.com/@claudiotesta)
+  ([photo](https://unsplash.com/photos/green-hills-with-forest-under-cloudy-sky-during-daytime--SO3JtE3gZo))
+- River — [Hendrik Cornelissen](https://unsplash.com/@the_bracketeer)
+  ([photo](https://unsplash.com/photos/time-lapse-photography-of-river--qrcOR33ErA))

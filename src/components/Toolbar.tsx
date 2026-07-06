@@ -17,6 +17,8 @@ import {
 
 export interface ToolbarProps {
   localMedia: UseLocalMediaResult
+  /** Custom background active — buttons float as frosted glass over it */
+  frosted: boolean
   isCameraEnabled: boolean
   isMicrophoneEnabled: boolean
   isScreensharing: boolean
@@ -47,6 +49,20 @@ const VARIANT_STYLES: Record<Variant, string> = {
   danger: 'bg-zinc-900 text-red-400 hover:bg-red-500 hover:text-white',
 }
 
+// Over a custom background the buttons become translucent frosted glass with
+// a thin border so they read as floating; stateful colors stay recognizable.
+const FROSTED_VARIANT_STYLES: Record<Variant, string> = {
+  default:
+    'border border-white/25 bg-zinc-950/25 text-white backdrop-blur-[15px] hover:bg-zinc-950/45',
+  off: 'border border-white/25 bg-red-500/75 text-white backdrop-blur-[15px] hover:bg-red-500/90',
+  active:
+    'border border-white/25 bg-brand-500/75 text-brand-950 backdrop-blur-[15px] hover:bg-brand-500/90',
+  danger:
+    'border border-white/25 bg-zinc-950/25 text-red-300 backdrop-blur-[15px] hover:bg-red-500/80 hover:text-white',
+}
+
+const FROSTED_LABEL = 'text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]'
+
 function ToolbarButton({
   icon,
   label,
@@ -54,6 +70,7 @@ function ToolbarButton({
   variant = 'default',
   badge,
   pulse = false,
+  frosted = false,
 }: {
   icon: ReactNode
   label: string
@@ -61,7 +78,9 @@ function ToolbarButton({
   variant?: Variant
   badge?: number
   pulse?: boolean
+  frosted?: boolean
 }) {
+  const styles = frosted ? FROSTED_VARIANT_STYLES : VARIANT_STYLES
   return (
     <button
       type="button"
@@ -70,7 +89,7 @@ function ToolbarButton({
       aria-label={label}
     >
       <span
-        className={`relative flex size-10 items-center justify-center rounded-xl text-base shadow-lg shadow-black/30 transition duration-200 active:scale-90 sm:size-12 sm:rounded-2xl sm:text-lg ${VARIANT_STYLES[variant]} ${pulse ? 'pulse-ring text-brand-400' : ''}`}
+        className={`relative flex size-10 items-center justify-center rounded-xl text-base shadow-lg shadow-black/30 transition duration-200 active:scale-90 sm:size-12 sm:rounded-2xl sm:text-lg ${styles[variant]} ${pulse ? 'pulse-ring text-brand-400' : ''}`}
       >
         {icon}
         {badge !== undefined && badge > 0 && (
@@ -79,7 +98,11 @@ function ToolbarButton({
           </span>
         )}
       </span>
-      <span className="text-[10px] font-medium text-zinc-400 transition group-hover:text-zinc-200 sm:text-[11px]">
+      <span
+        className={`text-[10px] font-medium transition sm:text-[11px] ${
+          frosted ? FROSTED_LABEL : 'text-zinc-400 group-hover:text-zinc-200'
+        }`}
+      >
         {label}
       </span>
     </button>
@@ -94,6 +117,7 @@ function DeviceToolbarButton({
   onClick,
   variant,
   sections,
+  frosted = false,
 }: {
   icon: ReactNode
   label: string
@@ -101,6 +125,7 @@ function DeviceToolbarButton({
   onClick: () => void
   variant: Variant
   sections: DeviceMenuSection[]
+  frosted?: boolean
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -129,7 +154,7 @@ function DeviceToolbarButton({
     <div ref={containerRef} className="relative flex flex-col items-center gap-1.5">
       {menuOpen && <DeviceMenu sections={sections} onClose={() => setMenuOpen(false)} />}
       <div
-        className={`flex items-stretch overflow-hidden rounded-xl shadow-lg shadow-black/30 transition duration-200 sm:rounded-2xl ${VARIANT_STYLES[variant]}`}
+        className={`flex items-stretch overflow-hidden rounded-xl shadow-lg shadow-black/30 transition duration-200 sm:rounded-2xl ${(frosted ? FROSTED_VARIANT_STYLES : VARIANT_STYLES)[variant]}`}
       >
         <button
           type="button"
@@ -153,13 +178,18 @@ function DeviceToolbarButton({
           />
         </button>
       </div>
-      <span className="text-[10px] font-medium text-zinc-400 sm:text-[11px]">{label}</span>
+      <span
+        className={`text-[10px] font-medium sm:text-[11px] ${frosted ? FROSTED_LABEL : 'text-zinc-400'}`}
+      >
+        {label}
+      </span>
     </div>
   )
 }
 
 export default function Toolbar({
   localMedia,
+  frosted,
   isCameraEnabled,
   isMicrophoneEnabled,
   isScreensharing,
@@ -190,6 +220,7 @@ export default function Toolbar({
         label="Cam"
         menuLabel="Choose camera"
         variant={isCameraEnabled ? 'default' : 'off'}
+        frosted={frosted}
         onClick={onToggleCamera}
         sections={[
           {
@@ -205,6 +236,7 @@ export default function Toolbar({
         label="Mic"
         menuLabel="Choose microphone or speaker"
         variant={isMicrophoneEnabled ? 'default' : 'off'}
+        frosted={frosted}
         onClick={onToggleMicrophone}
         sections={[
           {
@@ -224,6 +256,7 @@ export default function Toolbar({
       {!isMobile && canScreenshare && (
         <ToolbarButton
           icon={<ScreenShareIcon />}
+          frosted={frosted}
           label={isScreensharing ? 'Stop' : 'Share'}
           variant={isScreensharing ? 'active' : 'default'}
           onClick={onToggleScreenshare}
@@ -231,6 +264,7 @@ export default function Toolbar({
       )}
       <ToolbarButton
         icon={<BoardIcon />}
+        frosted={frosted}
         label="Board"
         variant={isBoardOpen ? 'active' : 'default'}
         pulse={isBoardActive && !isBoardOpen}
@@ -238,12 +272,14 @@ export default function Toolbar({
       />
       <ToolbarButton
         icon={<TranscriptIcon />}
+        frosted={frosted}
         label="Transcript"
         variant={isTranscribing ? 'active' : 'default'}
         onClick={onToggleTranscription}
       />
       <ToolbarButton
         icon={<ChatIcon />}
+        frosted={frosted}
         label="Chat"
         variant={activePanel === 'chat' ? 'active' : 'default'}
         badge={activePanel === 'chat' ? undefined : unreadChatCount}
@@ -254,10 +290,11 @@ export default function Toolbar({
           icon={<PeopleIcon />}
           label="People"
           variant={activePanel === 'people' ? 'active' : 'default'}
+          frosted={frosted}
           onClick={onTogglePeople}
         />
       )}
-      <ToolbarButton icon={<LeaveIcon />} label="Leave" variant="danger" onClick={onLeave} />
+      <ToolbarButton icon={<LeaveIcon />} label="Leave" variant="danger" frosted={frosted} onClick={onLeave} />
     </div>
   )
 }

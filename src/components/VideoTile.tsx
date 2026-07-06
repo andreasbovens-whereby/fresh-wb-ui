@@ -16,6 +16,8 @@ interface VideoTileProps {
   participant: TileParticipant
   onDoubleClick?: () => void
   style?: CSSProperties
+  /** Custom background active — float the tile with a border and under-shadow */
+  frosted?: boolean
 }
 
 function initials(name: string): string {
@@ -29,13 +31,15 @@ function initials(name: string): string {
   )
 }
 
-export default function VideoTile({ participant, onDoubleClick, style }: VideoTileProps) {
+export default function VideoTile({ participant, onDoubleClick, style, frosted }: VideoTileProps) {
   const { displayName, stream, isAudioEnabled, isVideoEnabled, isLocal } = participant
   const label = isLocal ? `${displayName} (you)` : displayName
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-2xl bg-zinc-900"
+      className={`relative h-full w-full overflow-hidden rounded-2xl bg-zinc-900 ${
+        frosted ? 'border border-white/25 shadow-[0_10px_30px_rgba(0,0,0,0.35)]' : ''
+      }`}
       style={style}
       onDoubleClick={onDoubleClick}
       title={onDoubleClick ? 'Double-click to toggle focus' : undefined}
