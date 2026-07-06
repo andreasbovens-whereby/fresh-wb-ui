@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #effef7;
+  --color-brand-100: #dafeef;
+  --color-brand-200: #b8fadd;
+  --color-brand-300: #81f4c3;
+  --color-brand-400: #43e5a0;
+  --color-brand-500: #1acd81;
+  --color-brand-600: #0fa968;
+  --color-brand-700: #108554;
+  --color-brand-800: #126945;
+  --color-brand-900: #11563a;
+  --color-brand-950: #03301f;
+}
+
+html,
+body {
+  height: 100%;
+  /* Anything poking past the viewport (popovers near edges) must clip, not
+     widen the page — iOS Safari zooms out to fit overflowing content. */
+  overflow-x: clip;
+}
+
+#root {
+  height: 100%;
+  /* Track iOS Safari's collapsing URL bar so the toolbar stays on screen */
+  height: 100dvh;
+}
+
+body {
+  @apply bg-zinc-950 text-zinc-100 antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Participant grid, split on viewport orientation: landscape (16:9-ish)
+   puts two tiles side by side; portrait (9:16-ish) stacks them top/bottom
+   and caps wider calls at 2 columns.
+
+   The grid's own width is capped to what the tiles need at a max 16:9 tile
+   aspect, so tiles stay packed together (gap-only spacing) and leftover
+   space falls OUTSIDE the grid. The 0.75rem below must match the gap-3 on
+   the grid element. cq units resolve against .video-grid-area. */
+.video-grid-area {
+  container-type: size;
+}
+.video-grid {
+  display: grid;
+  height: 100%;
+  grid-auto-rows: minmax(0, 1fr);
+  grid-template-columns: repeat(var(--grid-cols-portrait), minmax(0, 1fr));
+  width: min(
+    100%,
+    calc(
+      var(--grid-cols-portrait) *
+        ((100cqh - (var(--grid-rows-portrait) - 1) * 0.75rem) / var(--grid-rows-portrait)) * 16 / 9 +
+        (var(--grid-cols-portrait) - 1) * 0.75rem
+    )
+  );
+}
+@media (orientation: landscape) {
+  .video-grid {
+    grid-template-columns: repeat(var(--grid-cols-landscape), minmax(0, 1fr));
+    width: min(
+      100%,
+      calc(
+        var(--grid-cols-landscape) *
+          ((100cqh - (var(--grid-rows-landscape) - 1) * 0.75rem) / var(--grid-rows-landscape)) * 16 /
+          9 + (var(--grid-cols-landscape) - 1) * 0.75rem
+      )
+    );
+  }
+}
+
+/* Safety net per cell: center the tile and never let it exceed 16:9, even
+   when the grid is width-constrained into unusual cell shapes. Taller
+   (portrait) tiles may fill fully. */
+.tile-cell {
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+}
+.tile-cell > * {
+  height: 100cqh;
+  width: min(100cqw, calc(100cqh * 16 / 9));
+}
+
+/* Video elements rendered by the SDK's VideoView */
+video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Thin scrollbars in panels */
+.panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(63 63 70) transparent;
+}
+
+/* Screen-level entrance */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+/* Popovers, toasts, badges */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.pop-in {
+  animation: pop-in 0.18s ease-out both;
+}
+
+/* Tile morphs when featuring/unfeaturing a participant (View Transitions) */
+::view-transition-group(*) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Expanding outline for "someone is using the board" */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(26 205 129 / 0.65);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgb(26 205 129 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(26 205 129 / 0);
+  }
+}
+.pulse-ring {
+  animation: pulse-ring 1.6s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  .pop-in {
+    animation: none;
+  }
+  .pulse-ring {
+    animation: none;
+    box-shadow: 0 0 0 2px rgb(26 205 129 / 0.65);
+  }
+}
