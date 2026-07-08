@@ -89,6 +89,21 @@ body {
   width: min(100cqw, calc(100cqh * 16 / 9));
 }
 
+/* Screenshare tile: shrink-wraps exactly to the shared window/screen's own
+   aspect ratio (--ar, set from the video's real dimensions via
+   onVideoResize) instead of stretching to fill the pane — that stretching is
+   what forces object-fit:contain to draw black letterbox bars. Matching the
+   box to the content means there's nothing left over to bar off; the app's
+   background (or a custom one) shows through the margins instead. */
+.screenshare-frame {
+  container-type: size;
+}
+.screenshare-box {
+  aspect-ratio: var(--ar, 16 / 9);
+  width: min(100cqw, calc(100cqh * var(--ar, 16 / 9)));
+  max-height: 100%;
+}
+
 /* Video elements rendered by the SDK's VideoView */
 video {
   width: 100%;
@@ -130,6 +145,21 @@ video {
 }
 .pop-in {
   animation: pop-in 0.18s ease-out both;
+}
+
+/* Inside the Document PiP window (stylesheets are copied over, so this
+   applies to the popout document only) */
+@media (display-mode: picture-in-picture) {
+  body {
+    overflow: hidden;
+  }
+  .pip-root {
+    height: 100dvh;
+  }
+  /* Small window — keep tile name labels compact */
+  .pip-root .text-xs {
+    font-size: 0.65rem;
+  }
 }
 
 /* Tile morphs when featuring/unfeaturing a participant (View Transitions) */

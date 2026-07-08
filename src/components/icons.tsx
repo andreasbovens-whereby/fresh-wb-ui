@@ -173,6 +173,15 @@ export function CopyIcon(props: IconProps) {
   )
 }
 
+export function PipIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M21 11V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h5" />
+      <rect x={12.5} y={13.5} width={8.5} height={6.5} rx={1.5} />
+    </Icon>
+  )
+}
+
 export function SettingsIcon(props: IconProps) {
   return (
     <Icon {...props}>

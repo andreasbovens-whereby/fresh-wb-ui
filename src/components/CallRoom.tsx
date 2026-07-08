@@ -1,5 +1,5 @@
-import { lazy, Suspense, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { flushSync } from 'react-dom'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { createPortal, flushSync } from 'react-dom'
 import {
   VideoView,
   type RoomConnection,
@@ -11,7 +11,9 @@ import Toolbar from './Toolbar'
 import SidePanel, { type PanelTab, type TranscriptEntry } from './SidePanel'
 import WaitingParticipantsNotice from './WaitingParticipantsNotice'
 import BackgroundSettings from './BackgroundSettings'
-import { PeopleIcon, SettingsIcon, SpinnerIcon } from './icons'
+import { PeopleIcon, PipIcon, SettingsIcon, SpinnerIcon } from './icons'
+import { useDocumentPip } from '../lib/useDocumentPip'
+import { useCapturedSurfaceControl } from '../lib/useCapturedSurfaceControl'
 import {
   BACKGROUND_IMAGES,
   loadBackground,
@@ -109,6 +111,13 @@ export default function CallRoom({
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
   const frosted = background !== null
+  // Pill text over a custom background: brighten + shadow-anchor for
+  // contrast against arbitrarily light or busy imagery.
+  const pillText = frosted ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]' : 'text-zinc-200'
+
+  // Document PiP popout: duplicates the participant tiles into a floating
+  // window (main-window tiles keep playing — no Meet-style pause jank).
+  const pip = useDocumentPip()
 
   function changeBackground(choice: BackgroundChoice) {
     setBackground(choice)
@@ -153,10 +162,69 @@ export default function CallRoom({
   }, [state.localParticipant, state.remoteParticipants, state.isCameraEnabled, state.isMicrophoneEnabled])
 
   const featuredScreenshare = state.screenshares[0]
+  // Sized to the screenshare's own aspect ratio (see .screenshare-frame in
+  // index.css) so the tile shrink-wraps the video exactly — no letterbox bars.
+  const [screenshareAspect, setScreenshareAspect] = useState(16 / 9)
+  const screenshareVideoRef = useRef<HTMLVideoElement>(null)
+  useEffect(() => {
+    setScreenshareAspect(16 / 9) // reset until the new share's first resize event
+  }, [featuredScreenshare?.id])
+  useEffect(() => {
+    // Deliberately NOT using VideoView's onVideoResize here: that callback
+    // reports the video element's rendered CSS box size (clientWidth/Height)
+    // via a ResizeObserver, debounced at exactly 1000ms — feeding that into
+    // the CSS that controls the box's own size is circular. Each cycle's
+    // sub-pixel rounding compounded into a slow, steady height shrink once
+    // per second. The native 'resize' event instead fires only when the
+    // video's true intrinsic resolution (videoWidth/videoHeight) changes,
+    // which our own layout can never affect.
+    const video = screenshareVideoRef.current
+    if (!video || !featuredScreenshare?.stream) return
+    function updateAspect() {
+      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+        setScreenshareAspect(video.videoWidth / video.videoHeight)
+      }
+    }
+    updateAspect() // metadata may already be loaded
+    video.addEventListener('resize', updateAspect)
+    return () => video.removeEventListener('resize', updateAspect)
+  }, [featuredScreenshare?.stream])
   // Tolerates the featured participant leaving mid-call
   const featuredParticipant = participants.find((p) => p.id === featuredId)
   const isScreensharing =
     state.localScreenshareStatus === 'starting' || state.localScreenshareStatus === 'active'
+
+  // Captured Surface Control: scroll/zoom the tab you're sharing from its own
+  // preview, without switching to it. Chrome 136+ desktop, tab captures only.
+  const csc = useCapturedSurfaceControl()
+  const cscStreamId = featuredScreenshare?.isLocal ? featuredScreenshare.stream?.id : undefined
+  useEffect(() => {
+    if (featuredScreenshare?.isLocal && featuredScreenshare.stream) {
+      csc.onShareStarted(featuredScreenshare.stream)
+    }
+    // Re-checks only when the local share's own stream actually changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cscStreamId])
+  useEffect(() => {
+    // Catches sharing stopped via the browser's own "Stop sharing" bar, not
+    // just our button
+    if (!isScreensharing) csc.reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isScreensharing])
+
+  function startSharing() {
+    // Must run before startScreenshare(): it monkey-patches getDisplayMedia
+    // for that call's one-shot to inject a CaptureController, since the
+    // SDK's action itself takes no options.
+    csc.prepareNextShare()
+    actions.startScreenshare()
+    void pip.open() // so you still see people while presenting
+  }
+
+  function stopSharing() {
+    actions.stopScreenshare()
+    csc.reset()
+  }
   const chatVisible = panelOpen && panelTab === 'chat'
   const unreadChatCount = state.chatMessages.length - seenChatCount
 
@@ -242,6 +310,25 @@ export default function CallRoom({
               <PeopleIcon />
               {participants.length}
             </span>
+            {pip.supported && (
+              <button
+                type="button"
+                onClick={() => (pip.pipWindow ? pip.close() : void pip.open())}
+                aria-label={pip.pipWindow ? 'Close picture-in-picture' : 'Open picture-in-picture'}
+                aria-pressed={Boolean(pip.pipWindow)}
+                className={`flex items-center rounded-xl px-2.5 py-1.5 text-sm transition active:scale-95 ${
+                  pip.pipWindow
+                    ? frosted
+                      ? 'border border-white/25 bg-brand-500/75 text-brand-950 backdrop-blur-[15px] hover:bg-brand-500/90'
+                      : 'bg-brand-500 text-brand-950 hover:bg-brand-400'
+                    : frosted
+                      ? 'border border-white/25 bg-zinc-950/25 text-white backdrop-blur-[15px] hover:bg-zinc-950/45'
+                      : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
+                }`}
+              >
+                <PipIcon />
+              </button>
+            )}
             <button
               ref={settingsButtonRef}
               type="button"
@@ -298,28 +385,90 @@ export default function CallRoom({
               </div>
             ) : featuredScreenshare ? (
               <div className="fade-in flex h-full flex-col gap-3 lg:flex-row">
-                <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-zinc-900">
+                <div className="screenshare-frame relative flex min-h-0 flex-1 items-center justify-center">
                   {featuredScreenshare.stream ? (
-                    <VideoView
-                      stream={featuredScreenshare.stream}
-                      muted={featuredScreenshare.isLocal}
-                      style={{ objectFit: 'contain' }}
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-                      Starting screenshare…
+                    <div
+                      className={`screenshare-box relative overflow-hidden rounded-2xl bg-zinc-900 ${
+                        frosted ? 'border border-white/25 shadow-[0_10px_30px_rgba(0,0,0,0.35)]' : ''
+                      }`}
+                      style={{ '--ar': screenshareAspect } as CSSProperties}
+                    >
+                      <VideoView
+                        ref={(node) => {
+                          screenshareVideoRef.current = node
+                        }}
+                        stream={featuredScreenshare.stream}
+                        muted={featuredScreenshare.isLocal}
+                      />
+                      {featuredScreenshare.isLocal && (
+                        <div
+                          className={`pop-in absolute top-3 left-3 flex items-center gap-2 rounded-xl p-1.5 pl-3 ${
+                            frosted
+                              ? 'border border-white/25 bg-zinc-950/25 backdrop-blur-[15px]'
+                              : 'bg-zinc-950/80 backdrop-blur'
+                          }`}
+                        >
+                          <span className={`text-xs font-medium ${pillText}`}>
+                            You are presenting
+                          </span>
+                          <button
+                            type="button"
+                            onClick={stopSharing}
+                            className="rounded-lg bg-red-500 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-400 active:scale-95"
+                          >
+                            Stop sharing
+                          </button>
+                        </div>
+                      )}
+                      {featuredScreenshare.isLocal && csc.isTabCapture && (
+                        <div
+                          className={`pop-in absolute right-3 bottom-3 flex items-center gap-1.5 rounded-xl p-1.5 ${
+                            frosted
+                              ? 'border border-white/25 bg-zinc-950/25 backdrop-blur-[15px]'
+                              : 'bg-zinc-950/80 backdrop-blur'
+                          }`}
+                        >
+                          {!csc.scrollForwarding && (
+                            <button
+                              type="button"
+                              onClick={() => void csc.enableScrollForwarding(screenshareVideoRef.current)}
+                              className={`rounded-lg px-2 py-1 text-xs font-medium transition hover:bg-white/10 ${pillText}`}
+                              title="Scroll over this preview to scroll the shared tab"
+                            >
+                              Enable scroll control
+                            </button>
+                          )}
+                          {csc.zoomLevel !== null && (
+                            <div className="flex items-center gap-0.5">
+                              <button
+                                type="button"
+                                onClick={csc.zoomOut}
+                                disabled={csc.zoomLevel === csc.zoomLevels[0]}
+                                aria-label="Zoom out shared tab"
+                                className={`flex size-7 items-center justify-center rounded-lg text-sm font-semibold transition hover:bg-white/10 disabled:opacity-30 ${pillText}`}
+                              >
+                                −
+                              </button>
+                              <span className={`w-10 text-center text-xs tabular-nums ${pillText}`}>
+                                {csc.zoomLevel}%
+                              </span>
+                              <button
+                                type="button"
+                                onClick={csc.zoomIn}
+                                disabled={csc.zoomLevel === csc.zoomLevels[csc.zoomLevels.length - 1]}
+                                aria-label="Zoom in shared tab"
+                                className={`flex size-7 items-center justify-center rounded-lg text-sm font-semibold transition hover:bg-white/10 disabled:opacity-30 ${pillText}`}
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {featuredScreenshare.isLocal && (
-                    <div className="pop-in absolute top-3 left-3 flex items-center gap-2 rounded-xl bg-zinc-950/80 p-1.5 pl-3 backdrop-blur">
-                      <span className="text-xs font-medium text-zinc-200">You are presenting</span>
-                      <button
-                        type="button"
-                        onClick={() => actions.stopScreenshare()}
-                        className="rounded-lg bg-red-500 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-red-400 active:scale-95"
-                      >
-                        Stop sharing
-                      </button>
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center rounded-2xl bg-zinc-900 text-sm text-zinc-500">
+                      Starting screenshare…
                     </div>
                   )}
                 </div>
@@ -418,9 +567,7 @@ export default function CallRoom({
           unreadChatCount={unreadChatCount}
           onToggleCamera={() => actions.toggleCamera()}
           onToggleMicrophone={() => actions.toggleMicrophone()}
-          onToggleScreenshare={() =>
-            isScreensharing ? actions.stopScreenshare() : actions.startScreenshare()
-          }
+          onToggleScreenshare={() => (isScreensharing ? stopSharing() : startSharing())}
           onToggleTranscription={onToggleTranscription}
           onToggleChat={() => togglePanel('chat')}
           onTogglePeople={() => togglePanel('people')}
@@ -439,6 +586,24 @@ export default function CallRoom({
           {sidePanel}
         </div>
       )}
+
+      {/* Document PiP popout: DUPLICATE tiles (same MediaStreams, muted so
+          audio only plays once) — the main window keeps rendering everything */}
+      {pip.pipWindow &&
+        createPortal(
+          <div
+            className="pip-root grid gap-1.5 bg-zinc-950 p-1.5"
+            style={{
+              gridTemplateColumns: `repeat(${participants.length <= 1 ? 1 : 2}, minmax(0, 1fr))`,
+              gridAutoRows: 'minmax(0, 1fr)',
+            }}
+          >
+            {participants.map((p) => (
+              <VideoTile key={p.id} participant={p} muteAudio />
+            ))}
+          </div>,
+          pip.pipWindow.document.body,
+        )}
     </div>
   )
 }
