@@ -55,6 +55,25 @@ in secure contexts.
   named cursors. The Board toolbar button pulses when someone else is
   drawing. Contents are session-scoped: wiped a minute after the last
   participant leaves. No third-party services involved.
+- **Custom backgrounds**: a settings panel (gear icon, header) lets you pick
+  a photo or flat color behind the tiles (not the sidebar). When active, the
+  toolbar/pills switch to a frosted-glass look (border + `backdrop-blur`).
+  Persisted in localStorage; personal/local only, not synced to other
+  participants (a deliberate choice — see memory `background-sync-decision`
+  if that comes up again).
+- **Picture-in-Picture**: Document PiP (Chrome/Edge only — feature-detected,
+  hidden elsewhere) duplicates the tile grid into a real floating window
+  (fresh `<video>` elements on the same MediaStreams, muted so audio doesn't
+  double) rather than pausing the main UI. Manual toggle in the header, plus
+  auto-opens when you start screensharing and via Chrome's video-conferencing
+  auto-PiP hook (tab-switch mid-call).
+- **Captured Surface Control**: when sharing a browser tab (not a window or
+  full screen), a small control cluster on your own screenshare preview lets
+  you scroll/zoom the shared tab without switching to it. Bridges the SDK's
+  `startScreenshare()` — which calls `getDisplayMedia` internally with no way
+  to pass options — via a one-shot monkey-patch of
+  `navigator.mediaDevices.getDisplayMedia` that injects a `CaptureController`
+  right before the SDK's call. Chrome 136+ desktop only.
 - **Connection resilience**: brief drops keep the room on screen behind a
   "reconnecting" banner (15s grace before giving up); mute state is re-synced
   on connect to work around an SDK inversion bug; a mic watchdog detects the
