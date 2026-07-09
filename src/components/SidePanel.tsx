@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { RoomConnection } from '@whereby.com/browser-sdk/react'
 import type { TileParticipant } from './VideoTile'
 import {
@@ -52,6 +52,42 @@ interface TimelineItem {
   senderName: string | null
   time: number
   text: string
+}
+
+const URL_PATTERN = /https?:\/\/[^\s]+/g
+const TRAILING_PUNCTUATION = /[.,!?;:'")\]}]+$/
+
+function linkifyText(text: string): ReactNode[] {
+  const nodes: ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+  while ((match = URL_PATTERN.exec(text))) {
+    let url = match[0]
+    let end = match.index + url.length
+    const trailing = url.match(TRAILING_PUNCTUATION)
+    if (trailing) {
+      url = url.slice(0, -trailing[0].length)
+      end -= trailing[0].length
+    }
+    if (!url) continue
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index))
+    nodes.push(
+      <a
+        key={key++}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline underline-offset-2 opacity-90 hover:opacity-100"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {url}
+      </a>,
+    )
+    lastIndex = end
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex))
+  return nodes
 }
 
 function formatTime(time: number): string {
@@ -185,7 +221,7 @@ function ChatTab({
                 <div
                   className={`inline-block max-w-[85%] rounded-2xl px-4 py-2.5 text-left text-sm leading-relaxed break-words ${bubble}`}
                 >
-                  {item.text}
+                  {linkifyText(item.text)}
                 </div>
               </div>
             )
