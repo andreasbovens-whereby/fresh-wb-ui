@@ -285,7 +285,14 @@ export default function CallRoom({
   )
 
   return (
-    <div className="fade-in flex h-full">
+    // No entrance animation here (unlike other screens) — a transform/opacity
+    // animation on this container is a confirmed trigger for a Chrome
+    // backdrop-filter compositing bug on the frosted toolbar buttons further
+    // down this tree: hovering one leaves a stale blur/seam artifact on
+    // another until the next resize. See repro.html (git history) for the
+    // isolated reproduction — reduced from this component, bisected down to
+    // this exact fade-in.
+    <div className="flex h-full">
       <div className="relative flex min-w-0 flex-1 flex-col" style={backgroundStyle}>
         <WaitingParticipantsNotice
           waitingParticipants={state.waitingParticipants}
