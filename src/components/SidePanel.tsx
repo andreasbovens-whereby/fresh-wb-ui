@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { RoomConnection } from '@whereby.com/browser-sdk/react'
 import type { TileParticipant } from './VideoTile'
+import { findActiveShortcodeQuery, isSingleEmoji, replaceEmojiShortcodes, searchEmojiShortcodes } from '../lib/emoji'
 import {
   CameraIcon,
   CameraOffIcon,
@@ -109,9 +110,41 @@ function ChatTab({
   onSetOwnCaptions,
 }: Omit<SidePanelProps, 'variant' | 'tab' | 'onTabChange' | 'onClose'>) {
   const [draft, setDraft] = useState('')
+  const [caret, setCaret] = useState(0)
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0)
+  const [dismissedQueryStart, setDismissedQueryStart] = useState<number | null>(null)
   const [showTranscript, setShowTranscript] = useState(false)
   const [copied, setCopied] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Drives the `:shortcode` autocomplete popup below — the partial shortcode
+  // being typed right before the caret, and its matches.
+  const activeQuery = useMemo(() => findActiveShortcodeQuery(draft, caret), [draft, caret])
+  const suggestions = useMemo(
+    () => (activeQuery ? searchEmojiShortcodes(activeQuery.query) : []),
+    [activeQuery],
+  )
+  const showSuggestions =
+    activeQuery !== null && suggestions.length > 0 && activeQuery.start !== dismissedQueryStart
+
+  useEffect(() => {
+    setActiveSuggestionIndex(0)
+  }, [activeQuery?.start, activeQuery?.query])
+
+  function selectSuggestion(emoji: string) {
+    if (!activeQuery) return
+    const before = draft.slice(0, activeQuery.start)
+    const after = draft.slice(caret)
+    const next = `${before}${emoji} ${after}`
+    const newCaret = before.length + emoji.length + 1
+    setDraft(next)
+    setCaret(newCaret)
+    requestAnimationFrame(() => {
+      inputRef.current?.setSelectionRange(newCaret, newCaret)
+      inputRef.current?.focus()
+    })
+  }
 
   const timeline: TimelineItem[] = useMemo(() => {
     const chat: TimelineItem[] = chatMessages.map((m) => ({
@@ -225,6 +258,8 @@ function ChatTab({
                 : own
                   ? 'bg-brand-500 text-brand-950'
                   : 'bg-zinc-800 text-zinc-100'
+            // A lone emoji reads better big and bubble-free, like most chat apps.
+            const soloEmoji = item.kind === 'chat' && isSingleEmoji(item.text)
             return (
               <div key={item.id} className={`pop-in ${own ? 'text-right' : ''}`}>
                 <p className="mb-1 text-xs text-zinc-500">
@@ -232,11 +267,15 @@ function ChatTab({
                   {item.kind === 'caption' && <span className="text-violet-400/80">spoke · </span>}
                   {formatTime(item.time)}
                 </p>
-                <div
-                  className={`inline-block max-w-[85%] rounded-2xl px-4 py-2.5 text-left text-sm leading-relaxed break-words ${bubble}`}
-                >
-                  {linkifyText(item.text)}
-                </div>
+                {soloEmoji ? (
+                  <div className="emoji-pop inline-block text-6xl leading-none">{item.text.trim()}</div>
+                ) : (
+                  <div
+                    className={`inline-block max-w-[85%] rounded-2xl px-4 py-2.5 text-left text-sm leading-relaxed break-words ${bubble}`}
+                  >
+                    {linkifyText(item.text)}
+                  </div>
+                )}
               </div>
             )
           })
@@ -248,12 +287,59 @@ function ChatTab({
           e.preventDefault()
           send()
         }}
-        className="flex items-center gap-2 border-t border-zinc-800 p-4"
+        className="relative flex items-center gap-2 border-t border-zinc-800 p-4"
       >
+        {showSuggestions && (
+          <div className="absolute inset-x-4 bottom-full mb-2 max-h-56 overflow-y-auto rounded-2xl border border-zinc-700/80 bg-zinc-900 py-1 shadow-xl">
+            {suggestions.map(([name, emoji], i) => (
+              <button
+                key={name}
+                type="button"
+                // onMouseDown (not onClick) fires before the input blurs, so
+                // focus/selection stay put for the setSelectionRange below.
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  selectSuggestion(emoji)
+                }}
+                className={`flex w-full items-center gap-3 px-4 py-2 text-left text-sm ${
+                  i === activeSuggestionIndex ? 'bg-zinc-700/80 text-white' : 'text-zinc-300 hover:bg-zinc-800'
+                }`}
+              >
+                <span className="text-lg">{emoji}</span>
+                <span className="truncate text-zinc-400">:{name}:</span>
+              </button>
+            ))}
+          </div>
+        )}
         <input
+          ref={inputRef}
           type="text"
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            const rawValue = e.target.value
+            const rawCaret = e.target.selectionStart ?? rawValue.length
+            const next = replaceEmojiShortcodes(rawValue)
+            setDraft(next)
+            setCaret(Math.max(0, rawCaret - (rawValue.length - next.length)))
+          }}
+          onClick={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+          onKeyUp={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+          onKeyDown={(e) => {
+            if (!showSuggestions) return
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              setActiveSuggestionIndex((i) => (i + 1) % suggestions.length)
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              setActiveSuggestionIndex((i) => (i - 1 + suggestions.length) % suggestions.length)
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+              e.preventDefault()
+              selectSuggestion(suggestions[activeSuggestionIndex][1])
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              setDismissedQueryStart(activeQuery?.start ?? null)
+            }
+          }}
           placeholder="Send a chat message…"
           className="min-w-0 flex-1 rounded-2xl border border-zinc-700/80 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 outline-none transition focus:border-brand-500/60"
         />

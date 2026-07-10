@@ -147,6 +147,22 @@ video {
   animation: pop-in 0.18s ease-out both;
 }
 
+/* Solo emoji chat messages */
+@keyframes emoji-bounce {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.emoji-pop {
+  /* "back out" curve overshoots past 1 before settling — the bounce */
+  animation: emoji-bounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
 /* Inside the Document PiP window (stylesheets are copied over, so this
    applies to the popout document only) */
 @media (display-mode: picture-in-picture) {
@@ -186,7 +202,8 @@ video {
 
 @media (prefers-reduced-motion: reduce) {
   .fade-in,
-  .pop-in {
+  .pop-in,
+  .emoji-pop {
     animation: none;
   }
   .pulse-ring {
