@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import {
   VideoView,
@@ -23,6 +23,7 @@ import {
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useBoardActivity } from '../lib/useBoardActivity'
 import type { MicProblem } from '../lib/useMicWatchdog'
+import { isTranscriptionSignal } from '../lib/transcriptionSignal'
 
 // ~1MB chunk — load only when someone opens the board
 const WhiteboardStage = lazy(() => import('./WhiteboardStage'))
@@ -225,12 +226,30 @@ export default function CallRoom({
     actions.stopScreenshare()
     csc.reset()
   }
+  // Excludes the hidden transcription-sync marker messages (see
+  // transcriptionSignal.ts) from the visible chat, unread badge, and copy export.
+  const visibleChatMessages = useMemo(
+    () => state.chatMessages.filter((m) => !isTranscriptionSignal(m.text)),
+    [state.chatMessages],
+  )
   const chatVisible = panelOpen && panelTab === 'chat'
-  const unreadChatCount = state.chatMessages.length - seenChatCount
+  const unreadChatCount = visibleChatMessages.length - seenChatCount
+
+  // liveCaptions content is per-client — viewing the transcript sidebar
+  // subscribes this client's own connection to it, independent of the
+  // room-wide toggle (see SidePanel.tsx's ChatTab effect that calls this).
+  const { startLiveCaptions, stopLiveCaptions } = actions
+  const setOwnCaptions = useCallback(
+    (enabled: boolean) => {
+      if (enabled) startLiveCaptions()
+      else stopLiveCaptions()
+    },
+    [startLiveCaptions, stopLiveCaptions],
+  )
 
   function updatePanel(open: boolean, tab: PanelTab = panelTab) {
     // Entering or leaving the chat tab counts everything so far as read
-    if ((open && tab === 'chat') || chatVisible) setSeenChatCount(state.chatMessages.length)
+    if ((open && tab === 'chat') || chatVisible) setSeenChatCount(visibleChatMessages.length)
     setPanelOpen(open)
     setPanelTab(tab)
   }
@@ -245,12 +264,13 @@ export default function CallRoom({
       tab={panelTab}
       onTabChange={(tab) => updatePanel(true, tab)}
       onClose={() => updatePanel(false)}
-      chatMessages={state.chatMessages}
+      chatMessages={visibleChatMessages}
       transcript={transcript}
       isTranscribing={isTranscribing}
       participants={participants}
       localParticipantId={state.localParticipant?.id}
       onSendMessage={actions.sendChatMessage}
+      onSetOwnCaptions={setOwnCaptions}
     />
   )
 

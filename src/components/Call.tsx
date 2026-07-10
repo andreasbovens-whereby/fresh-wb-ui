@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRoomConnection, type UseLocalMediaResult } from '@whereby.com/browser-sdk/react'
 import CallRoom from './CallRoom'
 import StatusScreen from './StatusScreen'
@@ -7,6 +7,7 @@ import { SpinnerIcon } from './icons'
 import { useMicWatchdog } from '../lib/useMicWatchdog'
 import { isMobileDevice, useCameraAutoPause } from '../lib/useCameraAutoPause'
 import { useMediaSession } from '../lib/useMediaSession'
+import { encodeTranscriptionSignal, isTranscriptionSignal, transcriptionSignalIsActive } from '../lib/transcriptionSignal'
 
 interface CallProps {
   roomUrl: string
@@ -78,17 +79,41 @@ export default function Call({ roomUrl, localMedia, displayName, onRejoin, onLea
   const captionsStatus = state.liveCaptions?.status
   const sdkCaptionsActive = captionsStatus === 'captioning' || captionsStatus === 'requested'
   const [captionsOverride, setCaptionsOverride] = useState<boolean | null>(null)
-  const isTranscribing = captionsOverride ?? sdkCaptionsActive
+
+  // SDK quirk: `liveCaptions` (the caption text feed) is a per-client
+  // subscription — starting it on one client never surfaces on anyone
+  // else's captionLog or status, even once real speech is captioned. So the
+  // toolbar can't rely on it for a shared indicator. Broadcast our own
+  // "transcription is on" flag over the room's chat channel instead — a
+  // marker message filtered out of the visible chat (see transcriptionSignal.ts).
+  const { chatMessages } = state
+  const { sendChatMessage } = actions
+  const transcriptionSignalActive = useMemo(() => {
+    for (let i = chatMessages.length - 1; i >= 0; i--) {
+      if (isTranscriptionSignal(chatMessages[i].text)) return transcriptionSignalIsActive(chatMessages[i].text)
+    }
+    return false
+  }, [chatMessages])
+
+  // Combines both signals so the optimistic override below only lets go once
+  // BOTH the SDK's own captions status AND our own chat marker (which, like
+  // any chat message, only becomes visible to us after a server round trip —
+  // there's no local echo) agree with the toggled state. Releasing on
+  // sdkCaptionsActive alone let the override drop before our own marker
+  // landed, so isTranscribing fell back to the *previous* (stale) marker and
+  // flipped back — looking like the toggle didn't take.
+  const combinedActive = sdkCaptionsActive || transcriptionSignalActive
+  const isTranscribing = captionsOverride ?? combinedActive
 
   useEffect(() => {
-    if (captionsOverride !== null && captionsOverride === sdkCaptionsActive) {
+    if (captionsOverride !== null && captionsOverride === combinedActive) {
       setCaptionsOverride(null)
     }
-  }, [captionsOverride, sdkCaptionsActive])
+  }, [captionsOverride, combinedActive])
 
   const { stopLiveCaptions, startLiveCaptions } = actions
   useEffect(() => {
-    if (captionsOverride !== false || !sdkCaptionsActive) return
+    if (captionsOverride !== false || !combinedActive) return
     let attempts = 0
     const timer = setInterval(() => {
       attempts += 1
@@ -96,17 +121,38 @@ export default function Call({ roomUrl, localMedia, displayName, onRejoin, onLea
       if (attempts >= 3) clearInterval(timer)
     }, 2000)
     return () => clearInterval(timer)
-  }, [captionsOverride, sdkCaptionsActive, stopLiveCaptions])
+  }, [captionsOverride, combinedActive, stopLiveCaptions])
 
   function toggleTranscription() {
     if (isTranscribing) {
       stopLiveCaptions()
+      sendChatMessage(encodeTranscriptionSignal(false))
       setCaptionsOverride(false)
     } else {
       startLiveCaptions()
+      sendChatMessage(encodeTranscriptionSignal(true))
       setCaptionsOverride(true)
     }
   }
+
+  // Chat history from before a client connects never replays (unlike e.g.
+  // liveTranscription's roomJoined sync), so a marker sent before someone
+  // joins never reaches them — their icon would stay grey forever. Whoever's
+  // already in the call re-sends the "on" marker the moment they notice a
+  // new participant, so late joiners get a fresh live one.
+  const remoteParticipantIds = useMemo(
+    () => new Set(state.remoteParticipants.map((p) => p.id)),
+    [state.remoteParticipants],
+  )
+  const knownParticipantIds = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const previouslyKnown = knownParticipantIds.current
+    const hasNewJoin = [...remoteParticipantIds].some((id) => !previouslyKnown.has(id))
+    knownParticipantIds.current = remoteParticipantIds
+    if (hasNewJoin && isTranscribing) {
+      sendChatMessage(encodeTranscriptionSignal(true))
+    }
+  }, [remoteParticipantIds, isTranscribing, sendChatMessage])
 
   // Transcript lives here — NOT in CallRoom — so it survives the brief
   // unmount-worthy statuses of a connection blip. The SDK prunes captionLog

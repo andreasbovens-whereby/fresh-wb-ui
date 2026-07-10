@@ -43,6 +43,8 @@ interface SidePanelProps {
   participants: TileParticipant[]
   localParticipantId?: string
   onSendMessage: (text: string) => void
+  /** liveCaptions content is per-client — each viewer must subscribe locally to receive it. */
+  onSetOwnCaptions: (enabled: boolean) => void
 }
 
 interface TimelineItem {
@@ -104,6 +106,7 @@ function ChatTab({
   participants,
   localParticipantId,
   onSendMessage,
+  onSetOwnCaptions,
 }: Omit<SidePanelProps, 'variant' | 'tab' | 'onTabChange' | 'onClose'>) {
   const [draft, setDraft] = useState('')
   const [showTranscript, setShowTranscript] = useState(false)
@@ -134,6 +137,17 @@ function ChatTab({
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
   }, [timeline.length])
+
+  // liveCaptions content is per-client, so viewing the transcript here means
+  // subscribing this client's own connection to it — independent of whoever
+  // switched transcription on for the room. Stops again when the toggle
+  // flips off, or if this panel unmounts (e.g. switching to the People tab)
+  // while it was on.
+  useEffect(() => {
+    if (!showTranscript) return
+    onSetOwnCaptions(true)
+    return () => onSetOwnCaptions(false)
+  }, [showTranscript, onSetOwnCaptions])
 
   function resolveName(senderId: string): string | null {
     return participants.find((p) => p.id === senderId)?.displayName ?? null
@@ -291,6 +305,7 @@ export default function SidePanel({
   participants,
   localParticipantId,
   onSendMessage,
+  onSetOwnCaptions,
 }: SidePanelProps) {
   return (
     <aside
@@ -333,6 +348,7 @@ export default function SidePanel({
           participants={participants}
           localParticipantId={localParticipantId}
           onSendMessage={onSendMessage}
+          onSetOwnCaptions={onSetOwnCaptions}
         />
       ) : (
         <PeopleTab participants={participants} />
