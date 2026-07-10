@@ -15,30 +15,26 @@ independently off article 4's end state, so they can be read/built in any order
 — they don't depend on each other.
 
 ```
-0 (premise) → 1 → 2 → 3 → 4 ("core experience" complete)
-                              ├─ 5 (transcription)
-                              ├─ 6 (Document PiP)
-                              ├─ 7 (Media Session + mic watchdog)
-                              └─ 8 (whiteboard)
-                                     ↓
-                                     9 (tour of the finished app)
+1 (premise + basic room) → 2 → 3 → 4 ("core experience" complete)
+                                       ├─ 5 (transcription)
+                                       ├─ 6 (Document PiP)
+                                       ├─ 7 (Media Session + mic watchdog)
+                                       └─ 8 (whiteboard)
+                                              ↓
+                                              9 (tour of the finished app)
 ```
 
 ---
 
-## Article 0 — Premise
+## Article 1 — Premise + basic room experience
 
-- The paste-a-Whereby-URL approach: no backend, no credentials — the app only
-  ever consumes a room URL created elsewhere (e.g. via the Whereby Embedded
-  REST API).
-- Why the URL rides in the `#url=` fragment, not a `?url=` query param:
-  fragments never hit the wire (not sent in HTTP requests, not logged in
-  server access logs, not leaked via `Referer`), which matters because the
-  room URL contains the room's auth key. Combine with a `no-referrer` policy
-  meta tag.
-- Legacy `?url=` links get migrated to the fragment form for compatibility.
-
-## Article 1 — Basic room experience
+Premise: the paste-a-Whereby-URL approach — no backend, no credentials — the
+app only ever consumes a room URL created elsewhere (e.g. via the Whereby
+Embedded REST API). Why the URL rides in the `#url=` fragment, not a `?url=`
+query param: fragments never hit the wire (not sent in HTTP requests, not
+logged in server access logs, not leaked via `Referer`), which matters
+because the room URL contains the room's auth key. Combine with a
+`no-referrer` policy meta tag.
 
 Scope: join a call, see video tiles, mute/unmute cam+mic, leave. Mobile-friendly
 from the start, not retrofitted later.
