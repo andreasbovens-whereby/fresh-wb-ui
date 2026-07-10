@@ -330,16 +330,20 @@ export default function CallRoom({
             Fresh <span className="text-brand-400">·</span> Whereby
           </span>
           <span className="flex items-center gap-2">
-            <span
-              className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm ${
+            <button
+              type="button"
+              onClick={() => togglePanel('people')}
+              aria-label="People"
+              aria-pressed={panelOpen && panelTab === 'people'}
+              className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm transition active:scale-95 ${
                 frosted
-                  ? 'border border-white/25 bg-zinc-950/25 text-white backdrop-blur-[15px]'
-                  : 'bg-zinc-900 text-zinc-300'
+                  ? 'border border-white/25 bg-zinc-950/25 text-white backdrop-blur-[15px] hover:bg-zinc-950/45'
+                  : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
               }`}
             >
               <PeopleIcon />
               {participants.length}
-            </span>
+            </button>
             {pip.supported && (
               <button
                 type="button"
@@ -600,7 +604,6 @@ export default function CallRoom({
           onToggleScreenshare={() => (isScreensharing ? stopSharing() : startSharing())}
           onToggleTranscription={onToggleTranscription}
           onToggleChat={() => togglePanel('chat')}
-          onTogglePeople={() => togglePanel('people')}
           onLeave={onLeave}
         />
       </div>

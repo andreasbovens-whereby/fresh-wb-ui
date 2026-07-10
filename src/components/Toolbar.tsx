@@ -10,7 +10,6 @@ import {
   LeaveIcon,
   MicIcon,
   MicOffIcon,
-  PeopleIcon,
   ScreenShareIcon,
   TranscriptIcon,
 } from './icons'
@@ -27,7 +26,7 @@ export interface ToolbarProps {
   /** Someone else is drawing right now — pulse the Board button */
   isBoardActive: boolean
   onToggleBoard: () => void
-  /** Mobile: Share (doesn't work there) and People (lives in the sidebar tabs) are hidden */
+  /** Mobile: Share doesn't work there, so it's hidden */
   isMobile: boolean
   activePanel: 'chat' | 'people' | null
   unreadChatCount: number
@@ -36,7 +35,6 @@ export interface ToolbarProps {
   onToggleScreenshare: () => void
   onToggleTranscription: () => void
   onToggleChat: () => void
-  onTogglePeople: () => void
   onLeave: () => void
 }
 
@@ -205,7 +203,6 @@ export default function Toolbar({
   onToggleScreenshare,
   onToggleTranscription,
   onToggleChat,
-  onTogglePeople,
   onLeave,
 }: ToolbarProps) {
   const { state: media, actions: mediaActions } = localMedia
@@ -285,15 +282,6 @@ export default function Toolbar({
         badge={activePanel === 'chat' ? undefined : unreadChatCount}
         onClick={onToggleChat}
       />
-      {!isMobile && (
-        <ToolbarButton
-          icon={<PeopleIcon />}
-          label="People"
-          variant={activePanel === 'people' ? 'active' : 'default'}
-          frosted={frosted}
-          onClick={onTogglePeople}
-        />
-      )}
       <ToolbarButton icon={<LeaveIcon />} label="Leave" variant="danger" frosted={frosted} onClick={onLeave} />
     </div>
   )
