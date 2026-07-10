@@ -23,7 +23,7 @@ import {
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { useBoardActivity } from '../lib/useBoardActivity'
 import type { MicProblem } from '../lib/useMicWatchdog'
-import { isTranscriptionSignal } from '../lib/transcriptionSignal'
+import { encodeTranscriptionSignal, isTranscriptionSignal } from '../lib/transcriptionSignal'
 
 // ~1MB chunk — load only when someone opens the board
 const WhiteboardStage = lazy(() => import('./WhiteboardStage'))
@@ -236,15 +236,25 @@ export default function CallRoom({
   const unreadChatCount = visibleChatMessages.length - seenChatCount
 
   // liveCaptions content is per-client — viewing the transcript sidebar
-  // subscribes this client's own connection to it, independent of the
-  // room-wide toggle (see SidePanel.tsx's ChatTab effect that calls this).
-  const { startLiveCaptions, stopLiveCaptions } = actions
+  // subscribes this client's own connection to it (see SidePanel.tsx's
+  // ChatTab effect that calls this). Turning it on also broadcasts the
+  // shared "on" marker, since opening the transcript is a legitimate way to
+  // kick off transcription for the room (e.g. a participant who never used
+  // the toolbar button). Turning it off does NOT send an "off" marker —
+  // that only stops watching locally; transcription for the room keeps
+  // running (and the toolbar icon stays green) until someone explicitly
+  // stops it from the toolbar.
+  const { startLiveCaptions, stopLiveCaptions, sendChatMessage } = actions
   const setOwnCaptions = useCallback(
     (enabled: boolean) => {
-      if (enabled) startLiveCaptions()
-      else stopLiveCaptions()
+      if (enabled) {
+        startLiveCaptions()
+        sendChatMessage(encodeTranscriptionSignal(true))
+      } else {
+        stopLiveCaptions()
+      }
     },
-    [startLiveCaptions, stopLiveCaptions],
+    [startLiveCaptions, stopLiveCaptions, sendChatMessage],
   )
 
   function updatePanel(open: boolean, tab: PanelTab = panelTab) {
